@@ -1,2 +1,2 @@
-# tikfavvideoinfo
+# tikfavvideo
 获取抖音收藏夹视频的信息（作者，封面...
