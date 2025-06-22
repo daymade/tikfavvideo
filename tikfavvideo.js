@@ -270,11 +270,22 @@
                 })
             ].filter(el => el);
             
+            // 获取滚动容器内的视频数量
+            const scrollListContainer = document.querySelector('[data-e2e="scroll-list"]');
+            let videoLinksInScrollContainer = 0;
+            
+            if (scrollListContainer) {
+                videoLinksInScrollContainer = scrollListContainer.querySelectorAll('a[href*="/video/"]').length;
+            }
+            
             console.log('🔍 视频计数调试:', {
-                scrollListContainer: !!document.querySelector('[data-e2e="scroll-list"]'),
+                scrollListContainer: !!scrollListContainer,
                 ulContainer: !!document.querySelector('ul'),
                 containersFound: containers.length,
-                totalVideoLinks: document.querySelectorAll('a[href*="/video/"]').length
+                totalVideoLinks: document.querySelectorAll('a[href*="/video/"]').length,
+                videoLinksInScrollContainer,
+                scrollContainerHeight: scrollListContainer ? scrollListContainer.scrollHeight : 0,
+                scrollContainerClientHeight: scrollListContainer ? scrollListContainer.clientHeight : 0
             });
             
             if (containers.length > 0) {
@@ -342,12 +353,45 @@
             document.documentElement.scrollTop = scrollHeight;
             document.body.scrollTop = scrollHeight;
             
-            // 方法4: 找到scroll-list容器并滚动
+            // 方法4: 重点关注容器滚动（这是关键！）
             const scrollContainer = document.querySelector('[data-e2e="scroll-list"]');
             if (scrollContainer) {
-                scrollContainer.scrollTop = scrollContainer.scrollHeight;
-                console.log('🎯 尝试滚动scroll-list容器');
+                const beforeContainerScroll = scrollContainer.scrollTop;
+                const containerScrollHeight = scrollContainer.scrollHeight;
+                const containerClientHeight = scrollContainer.clientHeight;
+                
+                // 尝试多种容器滚动方法
+                scrollContainer.scrollTop = containerScrollHeight;
+                scrollContainer.scrollTo(0, containerScrollHeight);
+                scrollContainer.scrollTo({
+                    top: containerScrollHeight,
+                    behavior: 'smooth'
+                });
+                
+                const afterContainerScroll = scrollContainer.scrollTop;
+                
+                console.log('🎯 容器滚动详情:', {
+                    beforeContainerScroll,
+                    containerScrollHeight,
+                    containerClientHeight,
+                    afterContainerScroll,
+                    containerScrolled: afterContainerScroll - beforeContainerScroll,
+                    hasScrollableContent: containerScrollHeight > containerClientHeight
+                });
             }
+            
+            // 方法5: 查找其他可能的滚动容器
+            const otherScrollContainers = document.querySelectorAll('div[style*="overflow"], div[style*="scroll"]');
+            console.log('🔍 找到其他滚动容器数量:', otherScrollContainers.length);
+            
+            otherScrollContainers.forEach((container, index) => {
+                if (container.scrollHeight > container.clientHeight) {
+                    const before = container.scrollTop;
+                    container.scrollTop = container.scrollHeight;
+                    const after = container.scrollTop;
+                    console.log(`📦 容器${index + 1}滚动: ${before} → ${after}`);
+                }
+            });
             
             const afterScroll = window.pageYOffset;
             
@@ -360,6 +404,28 @@
                 currentVideoCount,
                 scrollSuccess: afterScroll > beforeScroll
             });
+            
+            // 方法6: 模拟用户滚动事件 - 有时候需要触发滚动事件来加载内容
+            const scrollEvent = new Event('scroll', { bubbles: true });
+            window.dispatchEvent(scrollEvent);
+            
+            if (scrollContainer) {
+                scrollContainer.dispatchEvent(scrollEvent);
+            }
+            
+            // 方法7: 模拟鼠标滚轮事件
+            const wheelEvent = new WheelEvent('wheel', {
+                deltaY: 1000,
+                bubbles: true
+            });
+            
+            if (scrollContainer) {
+                scrollContainer.dispatchEvent(wheelEvent);
+            } else {
+                document.dispatchEvent(wheelEvent);
+            }
+            
+            console.log('📡 已触发滚动和滚轮事件');
             
             // 等待新内容加载，给更多时间
             await new Promise(resolve => setTimeout(resolve, 3000));
