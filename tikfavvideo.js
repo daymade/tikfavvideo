@@ -270,12 +270,23 @@
                 })
             ].filter(el => el);
             
+            console.log('🔍 视频计数调试:', {
+                scrollListContainer: !!document.querySelector('[data-e2e="scroll-list"]'),
+                ulContainer: !!document.querySelector('ul'),
+                containersFound: containers.length,
+                totalVideoLinks: document.querySelectorAll('a[href*="/video/"]').length
+            });
+            
             if (containers.length > 0) {
-                return containers[0].querySelectorAll('a[href*="/video/"]').length;
+                const count = containers[0].querySelectorAll('a[href*="/video/"]').length;
+                console.log('从主容器计数:', count);
+                return count;
             } else {
-                return Array.from(document.querySelectorAll('a[href*="/video/"]')).filter(link => {
+                const filteredLinks = Array.from(document.querySelectorAll('a[href*="/video/"]')).filter(link => {
                     return link.querySelector('img') && link.closest('li, div[class]');
-                }).length;
+                });
+                console.log('从过滤链接计数:', filteredLinks.length);
+                return filteredLinks.length;
             }
         }
         
@@ -291,6 +302,17 @@
         updateProgress(`初始检测到 ${currentVideoCount} 个视频，开始自动滚动加载...`);
         console.log(`初始视频数量: ${currentVideoCount}`);
         
+        // 页面结构调试信息
+        console.log('📄 页面结构调试:', {
+            bodyHeight: document.body.scrollHeight,
+            windowHeight: window.innerHeight,
+            currentScroll: window.pageYOffset,
+            scrollableArea: document.body.scrollHeight - window.innerHeight,
+            hasScrollList: !!document.querySelector('[data-e2e="scroll-list"]'),
+            hasUl: !!document.querySelector('ul'),
+            totalDivs: document.querySelectorAll('div').length
+        });
+        
         // 确保滚动逻辑执行 - 即使初始视频数量为0也要尝试滚动
         if (currentVideoCount === 0) {
             updateProgress('未找到视频，尝试滚动刷新页面内容...');
@@ -303,9 +325,41 @@
             // 更新进度
             updateProgress(`正在滚动加载 (${scrollAttempts + 1}/${maxScrollAttempts}) - 当前 ${currentVideoCount} 个视频`);
             
-            // 滚动到页面底部
-            window.scrollTo(0, document.body.scrollHeight);
-            console.log(`滚动次数: ${scrollAttempts + 1}, 当前视频数: ${currentVideoCount}`);
+            // 滚动到页面底部 - 使用多种方法确保滚动成功
+            const beforeScroll = window.pageYOffset;
+            const scrollHeight = document.body.scrollHeight;
+            
+            // 方法1: window.scrollTo
+            window.scrollTo(0, scrollHeight);
+            
+            // 方法2: 如果上面没效果，尝试其他方法
+            window.scrollTo({
+                top: scrollHeight,
+                behavior: 'smooth'
+            });
+            
+            // 方法3: 直接操作scrollTop
+            document.documentElement.scrollTop = scrollHeight;
+            document.body.scrollTop = scrollHeight;
+            
+            // 方法4: 找到scroll-list容器并滚动
+            const scrollContainer = document.querySelector('[data-e2e="scroll-list"]');
+            if (scrollContainer) {
+                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                console.log('🎯 尝试滚动scroll-list容器');
+            }
+            
+            const afterScroll = window.pageYOffset;
+            
+            console.log(`🔄 滚动调试:`, {
+                scrollAttempt: scrollAttempts + 1,
+                beforeScroll,
+                scrollHeight,
+                afterScroll,
+                scrolledDistance: afterScroll - beforeScroll,
+                currentVideoCount,
+                scrollSuccess: afterScroll > beforeScroll
+            });
             
             // 等待新内容加载，给更多时间
             await new Promise(resolve => setTimeout(resolve, 3000));
