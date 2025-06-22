@@ -248,57 +248,29 @@
         // 等待页面加载完成
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // 自动滚动加载更多视频
+        // 自动滚动加载更多视频 - 专门针对TikTok虚拟滚动优化
         updateProgress('开始自动滚动加载更多视频...');
         console.log('开始自动滚动加载更多视频...');
         let previousVideoCount = 0;
         let currentVideoCount = 0;
         let scrollAttempts = 0;
         let noChangeAttempts = 0;
-        const maxScrollAttempts = 20; // 增加最大滚动次数
-        const maxNoChangeAttempts = 3; // 允许连续3次没有变化才停止
+        const maxScrollAttempts = 30; // 增加最大滚动次数
+        const maxNoChangeAttempts = 5; // 允许连续5次没有变化才停止
         
         // 使用更准确的视频计数方法
         function countVideos() {
-            // 优先使用我们后面会用到的精确选择器
-            const containers = [
-                document.querySelector('[data-e2e="scroll-list"]'),
-                document.querySelector('ul'),
-                ...Array.from(document.querySelectorAll('div')).filter(div => {
-                    const videoLinks = div.querySelectorAll('a[href*="/video/"]');
-                    return videoLinks.length >= 5;
-                })
-            ].filter(el => el);
-            
-            // 获取滚动容器内的视频数量
             const scrollListContainer = document.querySelector('[data-e2e="scroll-list"]');
-            let videoLinksInScrollContainer = 0;
-            
             if (scrollListContainer) {
-                videoLinksInScrollContainer = scrollListContainer.querySelectorAll('a[href*="/video/"]').length;
+                const videoLinks = scrollListContainer.querySelectorAll('a[href*="/video/"]');
+                console.log('🔍 从scroll-list容器计数:', videoLinks.length);
+                return videoLinks.length;
             }
             
-            console.log('🔍 视频计数调试:', {
-                scrollListContainer: !!scrollListContainer,
-                ulContainer: !!document.querySelector('ul'),
-                containersFound: containers.length,
-                totalVideoLinks: document.querySelectorAll('a[href*="/video/"]').length,
-                videoLinksInScrollContainer,
-                scrollContainerHeight: scrollListContainer ? scrollListContainer.scrollHeight : 0,
-                scrollContainerClientHeight: scrollListContainer ? scrollListContainer.clientHeight : 0
-            });
-            
-            if (containers.length > 0) {
-                const count = containers[0].querySelectorAll('a[href*="/video/"]').length;
-                console.log('从主容器计数:', count);
-                return count;
-            } else {
-                const filteredLinks = Array.from(document.querySelectorAll('a[href*="/video/"]')).filter(link => {
-                    return link.querySelector('img') && link.closest('li, div[class]');
-                });
-                console.log('从过滤链接计数:', filteredLinks.length);
-                return filteredLinks.length;
-            }
+            // 降级方案
+            const allVideoLinks = document.querySelectorAll('a[href*="/video/"]');
+            console.log('🔍 从全局计数:', allVideoLinks.length);
+            return allVideoLinks.length;
         }
         
         // 检查是否到达底部的函数
@@ -309,155 +281,164 @@
                    document.body.textContent.includes('没有更多内容');
         }
         
+        // 智能滚动方法 - 专门处理TikTok的虚拟滚动
+        function performSmartScroll() {
+            console.log('🎯 开始智能滚动...');
+            
+            // 方法1: 查找并滚动可滚动的父容器
+            const scrollContainer = document.querySelector('[data-e2e="scroll-list"]');
+            let scrollSuccess = false;
+            
+            if (scrollContainer) {
+                // 查找scrollContainer的所有可滚动父级
+                let currentElement = scrollContainer;
+                while (currentElement && currentElement !== document.body) {
+                    const computedStyle = window.getComputedStyle(currentElement);
+                    const hasVerticalScroll = currentElement.scrollHeight > currentElement.clientHeight;
+                    const canScroll = computedStyle.overflow === 'auto' || 
+                                    computedStyle.overflow === 'scroll' || 
+                                    computedStyle.overflowY === 'auto' || 
+                                    computedStyle.overflowY === 'scroll';
+                    
+                    if (hasVerticalScroll && canScroll) {
+                        const beforeScroll = currentElement.scrollTop;
+                        currentElement.scrollTop = currentElement.scrollHeight;
+                        const afterScroll = currentElement.scrollTop;
+                        
+                        console.log(`📦 滚动容器 ${currentElement.tagName}:`, {
+                            beforeScroll,
+                            afterScroll,
+                            scrolled: afterScroll - beforeScroll,
+                            scrollHeight: currentElement.scrollHeight,
+                            clientHeight: currentElement.clientHeight
+                        });
+                        
+                        if (afterScroll > beforeScroll) {
+                            scrollSuccess = true;
+                        }
+                    }
+                    currentElement = currentElement.parentElement;
+                }
+            }
+            
+            // 方法2: 使用键盘事件模拟向下滚动
+            const keyboardEvents = [
+                new KeyboardEvent('keydown', { key: 'PageDown', code: 'PageDown', bubbles: true }),
+                new KeyboardEvent('keydown', { key: 'End', code: 'End', bubbles: true }),
+                new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true })
+            ];
+            
+            keyboardEvents.forEach(event => {
+                document.dispatchEvent(event);
+                if (scrollContainer) {
+                    scrollContainer.dispatchEvent(event);
+                }
+            });
+            
+            // 方法3: 模拟鼠标滚轮事件在容器上
+            if (scrollContainer) {
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaY: 2000, // 增大滚动距离
+                    deltaMode: 0,
+                    bubbles: true,
+                    cancelable: true
+                });
+                scrollContainer.dispatchEvent(wheelEvent);
+                
+                // 在可能的父级滚动容器上也触发事件
+                let parent = scrollContainer.parentElement;
+                while (parent && parent !== document.body) {
+                    parent.dispatchEvent(wheelEvent);
+                    parent = parent.parentElement;
+                }
+            }
+            
+            // 方法4: 尝试触发加载更多的其他事件
+            const events = ['scroll', 'mousewheel', 'DOMMouseScroll', 'touchmove'];
+            events.forEach(eventType => {
+                const event = new Event(eventType, { bubbles: true });
+                document.dispatchEvent(event);
+                if (scrollContainer) {
+                    scrollContainer.dispatchEvent(event);
+                }
+            });
+            
+            // 方法5: 查找"加载更多"按钮并点击
+            const loadMoreSelectors = [
+                '[data-e2e*="load"]',
+                '[class*="load"]',
+                '[class*="more"]',
+                'button:contains("加载")',
+                'button:contains("更多")',
+                '.load-more',
+                '.loadmore'
+            ];
+            
+            for (let selector of loadMoreSelectors) {
+                try {
+                    const loadButton = document.querySelector(selector);
+                    if (loadButton && loadButton.offsetParent !== null) { // 确保元素可见
+                        console.log('🔘 找到加载更多按钮，尝试点击:', loadButton);
+                        loadButton.click();
+                        scrollSuccess = true;
+                        break;
+                    }
+                } catch (e) {
+                    // 忽略选择器错误
+                }
+            }
+            
+            console.log('🎯 智能滚动完成，成功:', scrollSuccess);
+            return scrollSuccess;
+        }
+        
         currentVideoCount = countVideos();
         updateProgress(`初始检测到 ${currentVideoCount} 个视频，开始自动滚动加载...`);
         console.log(`初始视频数量: ${currentVideoCount}`);
         
-        // 页面结构调试信息
-        console.log('📄 页面结构调试:', {
-            bodyHeight: document.body.scrollHeight,
-            windowHeight: window.innerHeight,
-            currentScroll: window.pageYOffset,
-            scrollableArea: document.body.scrollHeight - window.innerHeight,
-            hasScrollList: !!document.querySelector('[data-e2e="scroll-list"]'),
-            hasUl: !!document.querySelector('ul'),
-            totalDivs: document.querySelectorAll('div').length
-        });
-        
-        // 确保滚动逻辑执行 - 即使初始视频数量为0也要尝试滚动
-        if (currentVideoCount === 0) {
-            updateProgress('未找到视频，尝试滚动刷新页面内容...');
-        }
-        
-        // 改进的滚动逻辑 - 总是至少执行一次滚动
+        // 滚动循环
         while (scrollAttempts < maxScrollAttempts && (scrollAttempts === 0 || noChangeAttempts < maxNoChangeAttempts)) {
             previousVideoCount = currentVideoCount;
+            scrollAttempts++;
             
             // 更新进度
-            updateProgress(`正在滚动加载 (${scrollAttempts + 1}/${maxScrollAttempts}) - 当前 ${currentVideoCount} 个视频`);
+            updateProgress(`正在滚动加载 (${scrollAttempts}/${maxScrollAttempts}) - 当前 ${currentVideoCount} 个视频`);
             
-            // 滚动到页面底部 - 使用多种方法确保滚动成功
-            const beforeScroll = window.pageYOffset;
-            const scrollHeight = document.body.scrollHeight;
+            // 执行智能滚动
+            const scrollSuccess = performSmartScroll();
             
-            // 方法1: window.scrollTo
-            window.scrollTo(0, scrollHeight);
+            // 等待内容加载
+            await new Promise(resolve => setTimeout(resolve, scrollSuccess ? 2000 : 1000));
             
-            // 方法2: 如果上面没效果，尝试其他方法
-            window.scrollTo({
-                top: scrollHeight,
-                behavior: 'smooth'
-            });
-            
-            // 方法3: 直接操作scrollTop
-            document.documentElement.scrollTop = scrollHeight;
-            document.body.scrollTop = scrollHeight;
-            
-            // 方法4: 重点关注容器滚动（这是关键！）
-            const scrollContainer = document.querySelector('[data-e2e="scroll-list"]');
-            if (scrollContainer) {
-                const beforeContainerScroll = scrollContainer.scrollTop;
-                const containerScrollHeight = scrollContainer.scrollHeight;
-                const containerClientHeight = scrollContainer.clientHeight;
-                
-                // 尝试多种容器滚动方法
-                scrollContainer.scrollTop = containerScrollHeight;
-                scrollContainer.scrollTo(0, containerScrollHeight);
-                scrollContainer.scrollTo({
-                    top: containerScrollHeight,
-                    behavior: 'smooth'
-                });
-                
-                const afterContainerScroll = scrollContainer.scrollTop;
-                
-                console.log('🎯 容器滚动详情:', {
-                    beforeContainerScroll,
-                    containerScrollHeight,
-                    containerClientHeight,
-                    afterContainerScroll,
-                    containerScrolled: afterContainerScroll - beforeContainerScroll,
-                    hasScrollableContent: containerScrollHeight > containerClientHeight
-                });
-            }
-            
-            // 方法5: 查找其他可能的滚动容器
-            const otherScrollContainers = document.querySelectorAll('div[style*="overflow"], div[style*="scroll"]');
-            console.log('🔍 找到其他滚动容器数量:', otherScrollContainers.length);
-            
-            otherScrollContainers.forEach((container, index) => {
-                if (container.scrollHeight > container.clientHeight) {
-                    const before = container.scrollTop;
-                    container.scrollTop = container.scrollHeight;
-                    const after = container.scrollTop;
-                    console.log(`📦 容器${index + 1}滚动: ${before} → ${after}`);
-                }
-            });
-            
-            const afterScroll = window.pageYOffset;
-            
-            console.log(`🔄 滚动调试:`, {
-                scrollAttempt: scrollAttempts + 1,
-                beforeScroll,
-                scrollHeight,
-                afterScroll,
-                scrolledDistance: afterScroll - beforeScroll,
-                currentVideoCount,
-                scrollSuccess: afterScroll > beforeScroll
-            });
-            
-            // 方法6: 模拟用户滚动事件 - 有时候需要触发滚动事件来加载内容
-            const scrollEvent = new Event('scroll', { bubbles: true });
-            window.dispatchEvent(scrollEvent);
-            
-            if (scrollContainer) {
-                scrollContainer.dispatchEvent(scrollEvent);
-            }
-            
-            // 方法7: 模拟鼠标滚轮事件
-            const wheelEvent = new WheelEvent('wheel', {
-                deltaY: 1000,
-                bubbles: true
-            });
-            
-            if (scrollContainer) {
-                scrollContainer.dispatchEvent(wheelEvent);
-            } else {
-                document.dispatchEvent(wheelEvent);
-            }
-            
-            console.log('📡 已触发滚动和滚轮事件');
-            
-            // 等待新内容加载，给更多时间
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
+            // 重新计数视频
             currentVideoCount = countVideos();
-            scrollAttempts++;
             
             // 检查视频数量是否有变化
             if (currentVideoCount === previousVideoCount) {
                 noChangeAttempts++;
                 updateProgress(`滚动中... ${currentVideoCount} 个视频 (连续 ${noChangeAttempts} 次无变化)`);
                 console.log(`视频数量未变化，连续无变化次数: ${noChangeAttempts}/${maxNoChangeAttempts}`);
+                
+                // 如果多次无变化，尝试更激进的滚动
+                if (noChangeAttempts >= 3) {
+                    console.log('🚀 尝试激进滚动策略...');
+                    // 连续快速滚动
+                    for (let i = 0; i < 5; i++) {
+                        performSmartScroll();
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
             } else {
                 noChangeAttempts = 0; // 有变化则重置计数器
                 updateProgress(`发现新视频！${previousVideoCount} → ${currentVideoCount} 个视频`);
-                console.log(`视频数量增加: ${previousVideoCount} -> ${currentVideoCount}`);
+                console.log(`✅ 视频数量增加: ${previousVideoCount} -> ${currentVideoCount}`);
             }
             
             // 检查是否已经到底
             if (isAtBottom()) {
                 updateProgress(`已到达页面底部，共找到 ${currentVideoCount} 个视频`);
-                console.log('检测到"暂时没有更多"等文本，已到达页面底部，停止滚动');
+                console.log('✅ 检测到"暂时没有更多"等文本，已到达页面底部，停止滚动');
                 break;
-            }
-            
-            // 额外的滚动策略：如果连续没有变化但还没到底，再尝试滚动几次
-            if (noChangeAttempts >= 2 && !isAtBottom()) {
-                updateProgress(`尝试深度滚动策略... ${currentVideoCount} 个视频`);
-                console.log('尝试更积极的滚动策略...');
-                // 滚动到更下面一点
-                window.scrollTo(0, document.body.scrollHeight + 1000);
-                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
         
@@ -798,7 +779,13 @@
         
         // 改进加载完成判断：基于实际滚动结果和页面状态
         const reachedEnd = noMoreFound || noChangeAttempts >= maxNoChangeAttempts;
-        const needLoadMore = !reachedEnd && hasMoreButton;
+        
+        // 检查容器是否真的没有更多内容
+        const scrollContainer = document.querySelector('[data-e2e="scroll-list"]');
+        const containerFullyLoaded = scrollContainer && 
+                                   scrollContainer.scrollHeight === scrollContainer.clientHeight;
+        
+        const needLoadMore = !reachedEnd && !containerFullyLoaded && hasMoreButton;
         
         console.log('加载状态检查:', {
             noMoreFound,
@@ -806,7 +793,10 @@
             maxNoChangeAttempts,
             reachedEnd,
             needLoadMore,
-            hasMoreButton: !!hasMoreButton
+            hasMoreButton: !!hasMoreButton,
+            containerFullyLoaded,
+            containerScrollHeight: scrollContainer?.scrollHeight,
+            containerClientHeight: scrollContainer?.clientHeight
         });
         
         // 格式化输出为结构化的表格数据
