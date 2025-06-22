@@ -198,10 +198,58 @@
         // 检查是否选择了具体的收藏夹（通过检查是否有视频内容或收藏夹信息）
         console.log('开始检查页面状态...');
         
+        // 创建进度提示器
+        function createProgressIndicator() {
+            const progressDiv = document.createElement('div');
+            progressDiv.id = 'tikfav-progress';
+            progressDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #1f2937;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                border: 2px solid #3b82f6;
+                min-width: 280px;
+            `;
+            progressDiv.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 8px;">🚀 TikTok收藏夹导出中...</div>
+                <div id="progress-text">正在初始化...</div>
+                <div style="margin-top: 8px; font-size: 12px; opacity: 0.8;">请勿关闭页面</div>
+            `;
+            document.body.appendChild(progressDiv);
+            return progressDiv;
+        }
+        
+        function updateProgress(text) {
+            const progressText = document.getElementById('progress-text');
+            if (progressText) {
+                progressText.textContent = text;
+                console.log('📊 进度:', text);
+            }
+        }
+        
+        function removeProgressIndicator() {
+            const progressDiv = document.getElementById('tikfav-progress');
+            if (progressDiv) {
+                progressDiv.remove();
+            }
+        }
+        
+        // 创建进度指示器
+        const progressIndicator = createProgressIndicator();
+        updateProgress('等待页面加载完成...');
+        
         // 等待页面加载完成
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // 自动滚动加载更多视频
+        updateProgress('开始自动滚动加载更多视频...');
         console.log('开始自动滚动加载更多视频...');
         let previousVideoCount = 0;
         let currentVideoCount = 0;
@@ -240,11 +288,20 @@
         }
         
         currentVideoCount = countVideos();
+        updateProgress(`初始检测到 ${currentVideoCount} 个视频，开始自动滚动加载...`);
         console.log(`初始视频数量: ${currentVideoCount}`);
         
-        // 改进的滚动逻辑
-        while (scrollAttempts < maxScrollAttempts && noChangeAttempts < maxNoChangeAttempts) {
+        // 确保滚动逻辑执行 - 即使初始视频数量为0也要尝试滚动
+        if (currentVideoCount === 0) {
+            updateProgress('未找到视频，尝试滚动刷新页面内容...');
+        }
+        
+        // 改进的滚动逻辑 - 总是至少执行一次滚动
+        while (scrollAttempts < maxScrollAttempts && (scrollAttempts === 0 || noChangeAttempts < maxNoChangeAttempts)) {
             previousVideoCount = currentVideoCount;
+            
+            // 更新进度
+            updateProgress(`正在滚动加载 (${scrollAttempts + 1}/${maxScrollAttempts}) - 当前 ${currentVideoCount} 个视频`);
             
             // 滚动到页面底部
             window.scrollTo(0, document.body.scrollHeight);
@@ -259,20 +316,24 @@
             // 检查视频数量是否有变化
             if (currentVideoCount === previousVideoCount) {
                 noChangeAttempts++;
+                updateProgress(`滚动中... ${currentVideoCount} 个视频 (连续 ${noChangeAttempts} 次无变化)`);
                 console.log(`视频数量未变化，连续无变化次数: ${noChangeAttempts}/${maxNoChangeAttempts}`);
             } else {
                 noChangeAttempts = 0; // 有变化则重置计数器
+                updateProgress(`发现新视频！${previousVideoCount} → ${currentVideoCount} 个视频`);
                 console.log(`视频数量增加: ${previousVideoCount} -> ${currentVideoCount}`);
             }
             
             // 检查是否已经到底
             if (isAtBottom()) {
+                updateProgress(`已到达页面底部，共找到 ${currentVideoCount} 个视频`);
                 console.log('检测到"暂时没有更多"等文本，已到达页面底部，停止滚动');
                 break;
             }
             
             // 额外的滚动策略：如果连续没有变化但还没到底，再尝试滚动几次
             if (noChangeAttempts >= 2 && !isAtBottom()) {
+                updateProgress(`尝试深度滚动策略... ${currentVideoCount} 个视频`);
                 console.log('尝试更积极的滚动策略...');
                 // 滚动到更下面一点
                 window.scrollTo(0, document.body.scrollHeight + 1000);
@@ -280,6 +341,7 @@
             }
         }
         
+        updateProgress(`滚动完成！共找到 ${currentVideoCount} 个视频，开始提取数据...`);
         console.log(`滚动完成！最终视频数: ${currentVideoCount}, 总滚动次数: ${scrollAttempts}`);
         
         // 尝试找到当前选中的收藏夹信息
@@ -289,6 +351,7 @@
         // 查找当前激活的收藏夹名称 - 完全不依赖随机类名
         let collectionName = '当前收藏夹';
         
+        updateProgress('正在识别收藏夹名称...');
         console.log('=== 调试收藏夹名称查找（无随机类名版本）===');
         
         // 方法1: 通过data-tip属性定位新建收藏夹，然后分析周围结构
@@ -465,6 +528,7 @@
         
         
         collectionNameElement = { textContent: collectionName };
+        updateProgress(`收藏夹名称：${collectionName}，开始提取视频信息...`);
         console.log('最终收藏夹名称:', collectionName);
 
         // 尝试获取收藏夹数量 - 更精确的视频选择器
@@ -551,6 +615,7 @@
         };
 
         // 使用新的选择器提取视频信息
+        updateProgress(`正在提取 ${videoElements.length} 个视频的详细信息...`);
         videoElements.forEach((videoElement, index) => {
             try {
                 const videoId = extractVideoId(videoElement.href);
@@ -655,8 +720,10 @@
         };
         
         // 复制到剪切板
+        updateProgress('正在生成导出数据并复制到剪切板...');
         const exportText = JSON.stringify(exportData, null, 2);
         navigator.clipboard.writeText(exportText).then(() => {
+            removeProgressIndicator(); // 移除进度指示器
             if (needLoadMore) {
                 alert(`⚠️ 可能未加载完整！
 当前已导出 ${convert.videos.length} 个视频
@@ -675,6 +742,7 @@
 • 小白用户：复制"简化URL列表"中的链接到在线下载工具`);
             }
         }).catch(err => {
+            removeProgressIndicator(); // 确保在错误情况下也移除进度指示器
             alert('❌ 复制到剪切板失败: ' + err);
         });
     }
