@@ -598,6 +598,9 @@
             点赞数: video.likes || '未获取'
         }));
         
+        // 创建小白友好的URL列表
+        const simpleUrlList = convert.videos.map(video => video.url).join(',\n');
+        
         // 创建完整的导出数据
         const exportData = {
             收藏夹信息: {
@@ -607,7 +610,12 @@
                 用户ID: convert.collection.user.id,
                 导出时间: new Date().toLocaleString('zh-CN')
             },
-            视频列表: csvData
+            视频列表: csvData,
+            简化URL列表: {
+                说明: "以下是纯URL列表，适合复制到在线工具使用",
+                格式: "逗号+换行分隔",
+                链接: simpleUrlList
+            }
         };
         
         // 复制到剪切板
@@ -621,7 +629,14 @@
             } else {
                 alert(`✅ 导出完成！
 收藏夹"${convert.collection.name}"的 ${convert.videos.length} 个视频已复制到剪切板
-数据格式：结构化JSON，包含完整的视频信息表格`);
+
+📊 数据格式：结构化JSON，包含：
+• 完整的视频信息表格
+• 简化URL列表（适合小白用户复制到在线工具使用）
+
+💡 使用提示：
+• 技术用户：使用"视频列表"部分的详细数据
+• 小白用户：复制"简化URL列表"中的链接到在线下载工具`);
             }
         }).catch(err => {
             alert('❌ 复制到剪切板失败: ' + err);

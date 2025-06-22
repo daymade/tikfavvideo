@@ -1,0 +1,40 @@
+{
+  "收藏夹信息": {
+    "名称": "123",
+    "视频总数": 3,
+    "用户昵称": "天生的哦",
+    "用户ID": "未知",
+    "导出时间": "2025-6-22 14:30:15"
+  },
+  "视频列表": [
+    {
+      "序号": 1,
+      "视频ID": "7322323500700601640",
+      "标题": "丸子妹：苹果被"暴击"？销量跌30%！",
+      "链接": "https://www.douyin.com/video/7322323500700601640",
+      "封面": "https://p3-pc-sign.douyinpic.com/tos-cn-p-0015/oInAmBDhnink9Sg15LGWeheAbODCElQAH4IIOc~tplv-dy-cropcenter:323:430.jpeg",
+      "点赞数": "8.8万"
+    },
+    {
+      "序号": 2,
+      "视频ID": "7321750809488723238",
+      "标题": "成都老谭：成都就业情况到底如何？#金融常识 #失业率 #成都就业",
+      "链接": "https://www.douyin.com/video/7321750809488723238",
+      "封面": "https://p3-pc-sign.douyinpic.com/tos-cn-p-0015/oEI64lTAeBBsQg9fj5QAc8DAVKnw5nBSzbWd0D~tplv-dy-cropcenter:323:430.jpeg",
+      "点赞数": "5133"
+    },
+    {
+      "序号": 3,
+      "视频ID": "7322422499197685055",
+      "标题": "参谋长说车：插电SUV，要降价了？#买车那点事儿 #说车聊车 #带你懂车 #新能源汽车",
+      "链接": "https://www.douyin.com/video/7322422499197685055",
+      "封面": "https://p3-pc-sign.douyinpic.com/tos-cn-p-0015/oohnnbSqADzNQIelqDlgeBF8IB9nAKWcEAOcPc~tplv-dy-cropcenter:323:430.jpeg",
+      "点赞数": "1.1万"
+    }
+  ],
+  "简化URL列表": {
+    "说明": "以下是纯URL列表，适合复制到在线工具使用",
+    "格式": "逗号+换行分隔",
+    "链接": "https://www.douyin.com/video/7322323500700601640,\nhttps://www.douyin.com/video/7321750809488723238,\nhttps://www.douyin.com/video/7322422499197685055"
+  }
+}
