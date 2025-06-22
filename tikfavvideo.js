@@ -206,7 +206,9 @@
         let previousVideoCount = 0;
         let currentVideoCount = 0;
         let scrollAttempts = 0;
-        const maxScrollAttempts = 10;
+        let noChangeAttempts = 0;
+        const maxScrollAttempts = 20; // 增加最大滚动次数
+        const maxNoChangeAttempts = 3; // 允许连续3次没有变化才停止
         
         // 使用更准确的视频计数方法
         function countVideos() {
@@ -229,31 +231,56 @@
             }
         }
         
-        currentVideoCount = countVideos();
+        // 检查是否到达底部的函数
+        function isAtBottom() {
+            return document.body.textContent.includes('暂时没有更多') || 
+                   document.body.textContent.includes('没有更多了') ||
+                   document.body.textContent.includes('已经到底了') ||
+                   document.body.textContent.includes('没有更多内容');
+        }
         
-        while (scrollAttempts < maxScrollAttempts && currentVideoCount !== previousVideoCount) {
+        currentVideoCount = countVideos();
+        console.log(`初始视频数量: ${currentVideoCount}`);
+        
+        // 改进的滚动逻辑
+        while (scrollAttempts < maxScrollAttempts && noChangeAttempts < maxNoChangeAttempts) {
             previousVideoCount = currentVideoCount;
             
             // 滚动到页面底部
             window.scrollTo(0, document.body.scrollHeight);
             console.log(`滚动次数: ${scrollAttempts + 1}, 当前视频数: ${currentVideoCount}`);
             
-            // 等待新内容加载
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // 等待新内容加载，给更多时间
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
             currentVideoCount = countVideos();
             scrollAttempts++;
             
+            // 检查视频数量是否有变化
+            if (currentVideoCount === previousVideoCount) {
+                noChangeAttempts++;
+                console.log(`视频数量未变化，连续无变化次数: ${noChangeAttempts}/${maxNoChangeAttempts}`);
+            } else {
+                noChangeAttempts = 0; // 有变化则重置计数器
+                console.log(`视频数量增加: ${previousVideoCount} -> ${currentVideoCount}`);
+            }
+            
             // 检查是否已经到底
-            if (document.body.textContent.includes('暂时没有更多') || 
-                document.body.textContent.includes('没有更多了') ||
-                document.body.textContent.includes('已经到底了')) {
-                console.log('已到达页面底部，停止滚动');
+            if (isAtBottom()) {
+                console.log('检测到"暂时没有更多"等文本，已到达页面底部，停止滚动');
                 break;
+            }
+            
+            // 额外的滚动策略：如果连续没有变化但还没到底，再尝试滚动几次
+            if (noChangeAttempts >= 2 && !isAtBottom()) {
+                console.log('尝试更积极的滚动策略...');
+                // 滚动到更下面一点
+                window.scrollTo(0, document.body.scrollHeight + 1000);
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
         
-        console.log(`滚动完成，最终视频数: ${currentVideoCount}`);
+        console.log(`滚动完成！最终视频数: ${currentVideoCount}, 总滚动次数: ${scrollAttempts}`);
         
         // 尝试找到当前选中的收藏夹信息
         let collectionNameElement = null;
@@ -582,11 +609,20 @@
         // 检查是否需要加载更多内容
         const hasMoreButton = document.querySelector('[class*="more"], [class*="load"]');
         const noMoreText = document.querySelector('[class*="nomore"], [class*="结束"]');
-        const noMoreFound = document.body.textContent.includes('暂时没有更多') || 
-                           document.body.textContent.includes('没有更多了') ||
-                           document.body.textContent.includes('已经到底了');
+        const noMoreFound = isAtBottom(); // 使用相同的检测函数
         
-        const needLoadMore = !noMoreFound && (convert.videos.length < 29 || hasMoreButton);
+        // 改进加载完成判断：基于实际滚动结果和页面状态
+        const reachedEnd = noMoreFound || noChangeAttempts >= maxNoChangeAttempts;
+        const needLoadMore = !reachedEnd && hasMoreButton;
+        
+        console.log('加载状态检查:', {
+            noMoreFound,
+            noChangeAttempts,
+            maxNoChangeAttempts,
+            reachedEnd,
+            needLoadMore,
+            hasMoreButton: !!hasMoreButton
+        });
         
         // 格式化输出为结构化的表格数据
         const csvData = convert.videos.map((video, index) => ({
